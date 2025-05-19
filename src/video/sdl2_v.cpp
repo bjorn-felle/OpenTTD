@@ -377,6 +377,19 @@ static uint ConvertSdlKeycodeIntoMy(SDL_Keycode kc)
 	return key;
 }
 
+float smooth_scroll_amount = 0.01F;
+#ifdef fprintf
+#undef fprintf
+#endif
+
+void handleMouseWheel(SDL_Event ev) {
+	if (ev.wheel.y > 0) {
+		_cursor.wheel--;
+	} else if (ev.wheel.y < 0) {
+		_cursor.wheel++;
+	}
+}
+
 bool VideoDriver_SDL_Base::PollEvent()
 {
 	SDL_Event ev;
@@ -405,23 +418,75 @@ bool VideoDriver_SDL_Base::PollEvent()
 		}
 
 		case SDL_MOUSEWHEEL: {
-			if (ev.wheel.y > 0) {
-				_cursor.wheel--;
-			} else if (ev.wheel.y < 0) {
-				_cursor.wheel++;
+
+			bool handled_smooth_scroll = false;
+
+			Window *w = FindWindowFromPt(_cursor.pos.x, _cursor.pos.y);
+			if (w != nullptr && w->window_class == WC_MAIN_WINDOW) {
+
+				if (_game_mode != GM_NORMAL) return true;
+
+				if (w->viewport != nullptr) {
+					Viewport *vp = w->viewport.get();
+					if (vp != nullptr && vp->supports_smooth_zoom) {
+						ZoomLevel zoom = vp->zoom;
+
+						if (ev.wheel.y > 0) {
+							if (zoom == ZoomLevel::Min) {
+								vp->zoom_factor = 1.0F;
+							}
+							else {
+								vp->zoom_factor += smooth_scroll_amount;
+							}
+						} else if (ev.wheel.y < 0) {
+							if (zoom == ZoomLevel::Max) {
+								vp->zoom_factor = 1.0F;
+							}
+							else {
+								vp->zoom_factor -= smooth_scroll_amount;
+							}
+						}
+
+						if (vp->zoom_factor >= 2.0F) {
+							vp->zoom_factor = 1.0F;
+							handleMouseWheel(ev);
+						}
+
+						if (vp->zoom_factor <= 0.0F) {
+							vp->zoom_factor = 1.0F;
+							handleMouseWheel(ev);
+						}
+
+						vp->zoom_factor = std::clamp(vp->zoom_factor, smooth_scroll_amount, 2.00F-smooth_scroll_amount);
+
+						handled_smooth_scroll = true;
+
+						fprintf(stderr, "smooth_zoom = %.2f\n", static_cast<double>(vp->zoom_factor));
+					}
+				}
+
+
+
+
 			}
 
-			/* Handle 2D scrolling. */
-			const float SCROLL_BUILTIN_MULTIPLIER = 14.0f;
+			if (!handled_smooth_scroll) {
+				// Optionally pass through to UI
+
+				handleMouseWheel(ev);
+
+				/* Handle 2D scrolling. */
+				const float SCROLL_BUILTIN_MULTIPLIER = 14.0f;
 #if SDL_VERSION_ATLEAST(2, 18, 0)
-			_cursor.v_wheel -= ev.wheel.preciseY * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier;
-			_cursor.h_wheel += ev.wheel.preciseX * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier;
+				_cursor.v_wheel -= ev.wheel.preciseY * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier;
+				_cursor.h_wheel += ev.wheel.preciseX * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier;
 #else
-			_cursor.v_wheel -= static_cast<float>(ev.wheel.y * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier);
-			_cursor.h_wheel += static_cast<float>(ev.wheel.x * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier);
+				_cursor.v_wheel -= static_cast<float>(ev.wheel.y * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier);
+				_cursor.h_wheel += static_cast<float>(ev.wheel.x * SCROLL_BUILTIN_MULTIPLIER * _settings_client.gui.scrollwheel_multiplier);
 #endif
-			_cursor.wheel_moved = true;
-			break;
+				_cursor.wheel_moved = true;
+				break;
+			}
 		}
 
 		case SDL_MOUSEBUTTONDOWN:

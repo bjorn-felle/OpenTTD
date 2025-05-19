@@ -223,6 +223,8 @@ struct MainWindow : Window
 
 		this->viewport->overlay = std::make_shared<LinkGraphOverlay>(this, WID_M_VIEWPORT, 0, CompanyMask{}, 2);
 		this->refresh_timeout.Reset();
+
+		this->viewport->supports_smooth_zoom = true;
 	}
 
 	/** Refresh the link-graph overlay. */

@@ -41,6 +41,9 @@ struct Viewport {
 
 	ZoomLevel zoom; ///< The zoom level of the viewport.
 	std::shared_ptr<LinkGraphOverlay> overlay;
+
+	bool supports_smooth_zoom = false;
+	float zoom_factor = 1.0F;
 };
 
 /** Location information about a sign as seen on the viewport */
