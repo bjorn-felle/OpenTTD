@@ -154,12 +154,15 @@ struct CursorVars {
 	bool UpdateCursorPosition(int x, int y);
 };
 
+struct Viewport;
+
 /** Data about how and where to blit pixels. */
 struct DrawPixelInfo {
 	void *dst_ptr;
 	int left, top, width, height;
 	int pitch;
 	ZoomLevel zoom;
+	const Viewport *viewport_owner = nullptr;
 };
 
 /** Packed colour union to access the alpha, red, green, and blue channels from a 32 bit number for Emscripten build. */

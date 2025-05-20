@@ -118,4 +118,14 @@ inline void SetViewportCatchmentSpecializedStation(const Waypoint *st, bool sel)
 	SetViewportCatchmentWaypoint(st, sel);
 }
 
+static inline float GetZoomFactor()
+{
+	if (_cur_dpi != nullptr) {
+		const Viewport *vp = _cur_dpi->viewport_owner;
+		if (vp != nullptr && vp->supports_smooth_zoom) return vp->zoom_factor;
+	}
+	return 1.0f;
+}
+
+
 #endif /* VIEWPORT_FUNC_H */

@@ -1594,6 +1594,8 @@ bool FillDrawPixelInfo(DrawPixelInfo *n, int left, int top, int width, int heigh
 	}
 	n->height = height;
 
+	n->viewport_owner = o->viewport_owner;
+
 	return true;
 }
 

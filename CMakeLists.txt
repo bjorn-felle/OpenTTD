@@ -236,7 +236,9 @@ include_directories(${CMAKE_SOURCE_DIR}/src/3rdparty/squirrel/include)
 
 include(MSVCFilters)
 
-add_library(openttd_lib OBJECT ${GENERATED_SOURCE_FILES})
+add_library(openttd_lib OBJECT ${GENERATED_SOURCE_FILES}
+        src/video/blitter_helpers.cpp
+        src/video/blitter_helpers.h)
 add_executable(openttd WIN32)
 add_executable(openttd_test)
 set_target_properties(openttd PROPERTIES OUTPUT_NAME "${BINARY_NAME}")

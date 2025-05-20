@@ -1823,6 +1823,7 @@ void ViewportDoDraw(const Viewport &vp, int left, int top, int right, int bottom
 	dp.zoom = ZoomLevel::Min;
 	dp.width = UnScaleByZoom(dp.width, zoom);
 	dp.height = UnScaleByZoom(dp.height, zoom);
+	dp.viewport_owner = &vp;
 	AutoRestoreBackup cur_dpi(_cur_dpi, &dp);
 
 	if (vp.overlay != nullptr && vp.overlay->GetCargoMask() != 0 && vp.overlay->GetCompanyMask().Any()) {
@@ -1880,7 +1881,12 @@ void Window::DrawViewport() const
 	dpi->left += this->left;
 	dpi->top += this->top;
 
+	const Viewport *old_viewport_owner = dpi->viewport_owner;
+	dpi->viewport_owner = this->viewport.get();
+
 	ViewportDraw(*this->viewport, dpi->left, dpi->top, dpi->left + dpi->width, dpi->top + dpi->height);
+
+	dpi->viewport_owner = old_viewport_owner;
 
 	dpi->left -= this->left;
 	dpi->top -= this->top;

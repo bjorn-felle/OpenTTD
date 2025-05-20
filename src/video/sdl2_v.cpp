@@ -378,9 +378,6 @@ static uint ConvertSdlKeycodeIntoMy(SDL_Keycode kc)
 }
 
 float smooth_scroll_amount = 0.01F;
-#ifdef fprintf
-#undef fprintf
-#endif
 
 void handleMouseWheel(SDL_Event ev) {
 	if (ev.wheel.y > 0) {
@@ -389,6 +386,10 @@ void handleMouseWheel(SDL_Event ev) {
 		_cursor.wheel++;
 	}
 }
+
+#ifdef fprintf
+#undef fprintf
+#endif
 
 bool VideoDriver_SDL_Base::PollEvent()
 {
@@ -459,9 +460,11 @@ bool VideoDriver_SDL_Base::PollEvent()
 
 						vp->zoom_factor = std::clamp(vp->zoom_factor, smooth_scroll_amount, 2.00F-smooth_scroll_amount);
 
+						MarkWholeScreenDirty();
 						handled_smooth_scroll = true;
 
-						fprintf(stderr, "smooth_zoom = %.2f\n", static_cast<double>(vp->zoom_factor));
+						fprintf(stderr, "ZOOM CHANGED: %.2f", vp->zoom_factor);
+
 					}
 				}
 

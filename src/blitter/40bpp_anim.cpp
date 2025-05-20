@@ -18,7 +18,8 @@
 #include "../table/sprites.h"
 
 #include "../safeguards.h"
-
+#include "../viewport_func.h"
+#include "../video/blitter_helpers.h"
 
 /** Instantiation of the 40bpp with animation blitter factory. */
 static FBlitter_40bppAnim iFBlitter_40bppAnim;
@@ -82,6 +83,10 @@ void Blitter_40bppAnim::DrawLine(void *video, int x, int y, int x2, int y2, int 
 	});
 }
 
+#ifdef fprintf
+#undef fprintf
+#endif
+
 /**
  * Draws a sprite to a (screen) buffer. It is templated to allow faster operation.
  *
@@ -92,15 +97,66 @@ void Blitter_40bppAnim::DrawLine(void *video, int x, int y, int x2, int y2, int 
 template <BlitterMode mode>
 inline void Blitter_40bppAnim::Draw(const Blitter::BlitterParams *bp, ZoomLevel zoom)
 {
-	const SpriteData *src = (const SpriteData *)bp->sprite;
+	const SpriteData *srcUnscaled = (const SpriteData *)bp->sprite;
+	float zoom_factor = GetZoomFactor();
+	Colour *dst = (Colour *)bp->dst + bp->top * bp->pitch + bp->left;
 
-	/* src_px : each line begins with uint32_t n = 'number of bytes in this line',
-	 *          then n times is the Colour struct for this line */
-	const Colour *src_px = reinterpret_cast<const Colour *>(src->data + src->offset[0][zoom]);
-	/* src_n  : each line begins with uint32_t n = 'number of bytes in this line',
-	 *          then interleaved stream of 'm' and 'n' channels. 'm' is remap,
-	 *          'n' is number of bytes with the same alpha channel class */
-	const uint16_t *src_n = reinterpret_cast<const uint16_t *>(src->data + src->offset[1][zoom]);
+	//if (zoom_factor != 1.0F) fprintf(stderr, "zoom %.2f \n", zoom_factor);
+
+	zoom_factor = 1.2f;
+
+	int scaled_w, scaled_h;
+	auto scaled = ScaleSpriteNearest(
+		reinterpret_cast<const Colour *>(srcUnscaled->data + srcUnscaled->offset[0][zoom]),
+		bp->sprite_width,
+		bp->sprite_height,
+		zoom_factor,
+		scaled_w,
+		scaled_h
+	);
+
+	if (scaled) {
+		const Colour *scaled_data = scaled->get();
+		assert(bp->pitch >= scaled_w);
+		for (int y = 0; y < scaled_h; ++y) {
+			std::copy(
+				scaled_data + y * scaled_w,
+				scaled_data + (y + 1) * scaled_w,
+				dst + y * bp->pitch
+			);
+		}
+		return;
+	}
+
+	const Colour *src_px;
+	const uint16_t *src_n;
+
+	// if (scaled) {
+	// 	//fprintf(stderr, "got scaled");
+	// 	static uint16_t dummy_remap[1] = { 0 };
+	// 	src_px = scaled.get();
+	// 	src_n = dummy_remap;
+	// } else {
+		src_px = reinterpret_cast<const Colour *>(srcUnscaled->data + srcUnscaled->offset[0][zoom]);
+		src_n  = reinterpret_cast<const uint16_t *>(srcUnscaled->data + srcUnscaled->offset[1][zoom]);
+	// }
+
+
+	assert(VideoDriver::GetInstance()->GetAnimBuffer() != nullptr);
+	uint8_t *anim = VideoDriver::GetInstance()->GetAnimBuffer() +
+		((uint32_t *)bp->dst - (uint32_t *)_screen.dst_ptr) + bp->top * bp->pitch + bp->left;
+
+	const uint8_t *remap = bp->remap;
+
+	// Fast path for scaled sprites
+	if (scaled) {
+		for (int y = 0; y < scaled_h; ++y) {
+			Colour *dst_row = dst + y * bp->pitch;
+			const Colour *src_row = src_px + y * scaled_w;
+			std::copy(src_row, src_row + scaled_w, dst_row);
+		}
+		return;
+	}
 
 	/* skip upper lines in src_px and src_n */
 	for (uint i = bp->skip_top; i != 0; i--) {
@@ -109,12 +165,12 @@ inline void Blitter_40bppAnim::Draw(const Blitter::BlitterParams *bp, ZoomLevel 
 	}
 
 	/* skip lines in dst */
-	Colour *dst = (Colour *)bp->dst + bp->top * bp->pitch + bp->left;
+	// Colour *dst = (Colour *)bp->dst + bp->top * bp->pitch + bp->left;
 	assert(VideoDriver::GetInstance()->GetAnimBuffer() != nullptr);
-	uint8_t *anim = VideoDriver::GetInstance()->GetAnimBuffer() + ((uint32_t *)bp->dst - (uint32_t *)_screen.dst_ptr) + bp->top * bp->pitch + bp->left;
+	// uint8_t *anim = VideoDriver::GetInstance()->GetAnimBuffer() + ((uint32_t *)bp->dst - (uint32_t *)_screen.dst_ptr) + bp->top * bp->pitch + bp->left;
 
 	/* store so we don't have to access it via bp every time (compiler assumes pointer aliasing) */
-	const uint8_t *remap = bp->remap;
+	// const uint8_t *remap = bp->remap;
 
 	for (int y = 0; y < bp->height; y++) {
 		/* next dst line begins here */

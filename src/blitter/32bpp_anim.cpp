@@ -16,6 +16,8 @@
 #include "../table/sprites.h"
 
 #include "../safeguards.h"
+#include "../viewport_func.h"
+#include "../video/blitter_helpers.h"
 
 /** Instantiation of the 32bpp with animation blitter factory. */
 static FBlitter_32bppAnim iFBlitter_32bppAnim;
@@ -23,20 +25,61 @@ static FBlitter_32bppAnim iFBlitter_32bppAnim;
 template <BlitterMode mode>
 inline void Blitter_32bppAnim::Draw(const Blitter::BlitterParams *bp, ZoomLevel zoom)
 {
-	const SpriteData *src = (const SpriteData *)bp->sprite;
+	const SpriteData *srcUnscaled = (const SpriteData *)bp->sprite;
+	float zoom_factor = GetZoomFactor();
 
-	const Colour *src_px = reinterpret_cast<const Colour *>(src->data + src->offset[0][zoom]);
-	const uint16_t *src_n = reinterpret_cast<const uint16_t *>(src->data + src->offset[1][zoom]);
+	Colour *dst = (Colour *)bp->dst + bp->top * bp->pitch + bp->left;
+
+	int scaled_w, scaled_h;
+
+	auto scaled = ScaleSpriteNearest(reinterpret_cast<const Colour *>(srcUnscaled->data + srcUnscaled->offset[0][zoom]), bp->sprite_width, bp->sprite_height, zoom_factor, scaled_w, scaled_h);
+
+	if (scaled) {
+		const Colour *scaled_data = scaled->get();
+		assert(bp->pitch >= scaled_w);
+		for (int y = 0; y < scaled_h; ++y) {
+			std::copy(
+				scaled_data + y * scaled_w,
+				scaled_data + (y + 1) * scaled_w,
+				dst + y * bp->pitch
+			);
+		}
+		return;
+	}
+
+	const Colour *src_px;
+	const uint16_t *src_n;
+
+	// if (scaled) {
+	// 	// Fallback remap buffer
+	// 	static uint16_t dummy_remap[1] = { 0 }; // Dummy data, as real remap doesn't exist
+	// 	src_px = scaled.get();
+	// 	src_n = dummy_remap; // You'll skip all remapping/animation for now
+	// } else {
+		// Proceed with regular sprite
+		src_px = reinterpret_cast<const Colour *>(srcUnscaled->data + srcUnscaled->offset[0][zoom]);
+		src_n  = reinterpret_cast<const uint16_t *>(srcUnscaled->data + srcUnscaled->offset[1][zoom]);
+	// }
 
 	for (uint i = bp->skip_top; i != 0; i--) {
 		src_px = (const Colour *)((const uint8_t *)src_px + *(const uint32_t *)src_px);
 		src_n  = (const uint16_t *)((const uint8_t *)src_n  + *(const uint32_t *)src_n);
 	}
 
-	Colour *dst = (Colour *)bp->dst + bp->top * bp->pitch + bp->left;
 	uint16_t *anim = this->anim_buf + this->ScreenToAnimOffset((uint32_t *)bp->dst) + bp->top * this->anim_buf_pitch + bp->left;
 
 	const uint8_t *remap = bp->remap; // store so we don't have to access it via bp every time
+
+	if (scaled) {
+		Colour *dst = (Colour *)bp->dst + bp->top * bp->pitch + bp->left;
+
+		for (int y = 0; y < scaled_h; ++y) {
+			Colour *dst_row = dst + y * bp->pitch;
+			const Colour *src_row = src_px + y * scaled_w;
+			std::copy(src_row, src_row + scaled_w, dst_row);
+		}
+		return;
+	}
 
 	for (int y = 0; y < bp->height; y++) {
 		Colour *dst_ln = dst + bp->pitch;
